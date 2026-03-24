@@ -23,10 +23,10 @@ conn.commit()
 def main(page: ft.Page):
     page.title = "Free Games"
     page.theme_mode = ft.ThemeMode.DARK
-    page.scroll = ft.ScrollMode.AUTO 
+    page.scroll = ft.ScrollMode.AUTO
+
     output = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
-    # SEARCH (still simple, but now useful later if you expand it)
     def SearchForGames(e: ft.ControlEvent):
         message.value = e.control.value
         page.update()
@@ -37,6 +37,12 @@ def main(page: ft.Page):
     )
 
     message = ft.Text()
+
+    # store selected game globally inside main
+    selected_game = {"data": None}
+
+    def handle_game_click(e):
+        showGameDetails(selected_game["data"])
 
     def showGameDetails(g):
         page.controls.clear()
@@ -49,12 +55,8 @@ def main(page: ft.Page):
                 ft.Text(f"Platform: {g[3]}"),
                 ft.Text(g[5]),
                 ft.ElevatedButton(
-                    "Play Game",
-                    on_click=lambda e: page.launch_url(g[6])
-                ),
-                ft.ElevatedButton(
                     "Back",
-                    on_click=lambda e: goBack()
+                    on_click=goBack
                 )
             ],
             scroll=ft.ScrollMode.AUTO,
@@ -63,16 +65,18 @@ def main(page: ft.Page):
 
         page.update()
 
-    def goBack():
+    def goBack(e):
         page.controls.clear()
         page.add(main_layout)
         page.update()
 
     def gameCard(g):
+        selected_game["data"] = g
+
         return ft.Container(
             content=ft.Column([
                 ft.GestureDetector(
-                    on_tap=lambda e: showGameDetails(g),
+                    on_tap=handle_game_click,
                     content=ft.Image(src=g[4], width=200, height=120)
                 ),
                 ft.Text(g[1], weight="bold"),
