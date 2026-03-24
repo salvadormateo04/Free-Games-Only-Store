@@ -38,11 +38,10 @@ def main(page: ft.Page):
 
     message = ft.Text()
 
-    # store selected game globally inside main
-    selected_game = {"data": None}
-
+    # CLICK HANDLER (fixed)
     def handle_game_click(e):
-        showGameDetails(selected_game["data"])
+        g = e.control.data
+        showGameDetails(g)
 
     def showGameDetails(g):
         page.controls.clear()
@@ -70,15 +69,17 @@ def main(page: ft.Page):
         page.add(main_layout)
         page.update()
 
+    # GAME CARD (fixed)
     def gameCard(g):
-        selected_game["data"] = g
+        detector = ft.GestureDetector(
+            content=ft.Image(src=g[4], width=200, height=120),
+            on_tap=handle_game_click,
+            data=g
+        )
 
         return ft.Container(
             content=ft.Column([
-                ft.GestureDetector(
-                    on_tap=handle_game_click,
-                    content=ft.Image(src=g[4], width=200, height=120)
-                ),
+                detector,
                 ft.Text(g[1], weight="bold"),
                 ft.Text(g[2]),
                 ft.Text(g[3]),
