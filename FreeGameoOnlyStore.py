@@ -21,6 +21,17 @@ def main(page: ft.Page):
     page.title = "Free Games"
     page.theme_mode = ft.ThemeMode.DARK
     page.scroll = ft.ScrollMode.AUTO
+    def SearchForGames(e: [ft.TextField]):
+        message.value = e.control.value
+        page.update()
+
+    page.add(
+        ft.TextField(
+            label="Search for games",
+            on_change=SearchForGames,
+        ),
+        message := ft.Text(),
+    )
 
     output = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
