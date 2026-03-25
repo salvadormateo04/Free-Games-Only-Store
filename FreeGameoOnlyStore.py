@@ -6,6 +6,17 @@ import random
 conn = sqlite3.connect("games.db", check_same_thread=False)
 cursor = conn.cursor()
 
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Game'")
+table_exists = cursor.fetchone()
+
+if table_exists:
+    cursor.execute("PRAGMA table_info(Game)")
+    columns = [col[1] for col in cursor.fetchall()]
+
+    if "description" not in columns or "url" not in columns:
+        cursor.execute("DROP TABLE Game")
+        conn.commit()
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS Game (
     id INTEGER PRIMARY KEY,
@@ -17,6 +28,7 @@ CREATE TABLE IF NOT EXISTS Game (
     url TEXT
 )
 """)
+
 conn.commit()
 
 
@@ -38,7 +50,6 @@ def main(page: ft.Page):
 
     message = ft.Text()
 
-    # CLICK HANDLER (fixed)
     def handle_game_click(e):
         g = e.control.data
         showGameDetails(g)
@@ -52,7 +63,7 @@ def main(page: ft.Page):
                 ft.Text(g[1], size=25, weight="bold"),
                 ft.Text(f"Genre: {g[2]}"),
                 ft.Text(f"Platform: {g[3]}"),
-                ft.Text(g[5]),
+                ft.Text(g[5] if g[5] else "No description available"),
                 ft.ElevatedButton(
                     "Back",
                     on_click=goBack
@@ -69,7 +80,6 @@ def main(page: ft.Page):
         page.add(main_layout)
         page.update()
 
-    # GAME CARD (fixed)
     def gameCard(g):
         detector = ft.GestureDetector(
             content=ft.Image(src=g[4], width=200, height=120),
@@ -117,8 +127,8 @@ def main(page: ft.Page):
                     g["genre"],
                     g["platform"],
                     g["thumbnail"],
-                    g["short_description"],
-                    g["game_url"]
+                    g.get("short_description", ""),
+                    g.get("game_url", "")
                 )
             )
 
