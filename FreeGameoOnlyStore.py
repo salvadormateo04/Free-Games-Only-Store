@@ -6,17 +6,6 @@ import random
 conn = sqlite3.connect("games.db", check_same_thread=False)
 cursor = conn.cursor()
 
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Game'")
-table_exists = cursor.fetchone()
-
-if table_exists:
-    cursor.execute("PRAGMA table_info(Game)")
-    columns = [col[1] for col in cursor.fetchall()]
-
-    if "description" not in columns or "url" not in columns:
-        cursor.execute("DROP TABLE Game")
-        conn.commit()
-
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS Game (
     id INTEGER PRIMARY KEY,
@@ -28,8 +17,24 @@ CREATE TABLE IF NOT EXISTS Game (
     url TEXT
 )
 """)
-
 conn.commit()
+
+
+def ensureColumns():
+    columns = [
+        ("description", "TEXT"),
+        ("url", "TEXT")
+    ]
+
+    for colName, colType in columns:
+        try:
+            cursor.execute(f"ALTER TABLE Game ADD COLUMN {colName} {colType}")
+            conn.commit()
+        except:
+            pass
+
+
+ensureColumns()
 
 
 def main(page: ft.Page):
@@ -39,67 +44,66 @@ def main(page: ft.Page):
 
     output = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
-    def SearchForGames(e: ft.ControlEvent):
-        message.value = e.control.value
+    # 🔒 anti-spam lock
+    is_loading = {"value": False}
+
+    def goBack(e=None):
+        page.controls.clear()
+        page.add(mainLayout)
         page.update()
 
-    search_field = ft.TextField(
-        label="Search for games",
-        on_change=SearchForGames,
-    )
+    def openGameUrl(e: ft.ControlEvent):
+        page.launch_url(e.control.data)
 
-    message = ft.Text()
-
-    def handle_game_click(e):
+    def showGameDetails(e: ft.ControlEvent):
         g = e.control.data
-        showGameDetails(g)
-
-    def showGameDetails(g):
         page.controls.clear()
 
         page.add(
-            ft.Column([
-                ft.Image(src=g[4], width=400, height=200),
-                ft.Text(g[1], size=25, weight="bold"),
-                ft.Text(f"Genre: {g[2]}"),
-                ft.Text(f"Platform: {g[3]}"),
-                ft.Text(g[5] if g[5] else "No description available"),
-                ft.ElevatedButton(
-                    "Back",
-                    on_click=goBack
-                )
-            ],
-            scroll=ft.ScrollMode.AUTO,
-            expand=True)
+            ft.Column(
+                [
+                    ft.Image(src=g[4], width=400, height=200),
+                    ft.Text(g[1], size=25, weight="bold"),
+                    ft.Text(f"Genre: {g[2]}"),
+                    ft.Text(f"Platform: {g[3]}"),
+                    ft.Text(g[5]),
+                    ft.ElevatedButton(
+                        "Play Game",
+                        data=g[6],
+                        on_click=openGameUrl
+                    ),
+                    ft.ElevatedButton(
+                        "Back",
+                        on_click=goBack
+                    ),
+                ],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            )
         )
 
-        page.update()
-
-    def goBack(e):
-        page.controls.clear()
-        page.add(main_layout)
         page.update()
 
     def gameCard(g):
-        detector = ft.GestureDetector(
-            content=ft.Image(src=g[4], width=200, height=120),
-            on_tap=handle_game_click,
-            data=g
-        )
-
         return ft.Container(
-            content=ft.Column([
-                detector,
-                ft.Text(g[1], weight="bold"),
-                ft.Text(g[2]),
-                ft.Text(g[3]),
-            ]),
-            padding=10
+            content=ft.Column(
+                [
+                    ft.GestureDetector(
+                        data=g,
+                        on_tap=showGameDetails,
+                        content=ft.Image(src=g[4], width=200, height=120),
+                    ),
+                    ft.Text(g[1], weight="bold"),
+                    ft.Text(g[2]),
+                    ft.Text(g[3]),
+                ]
+            ),
+            padding=10,
         )
 
-    def showGames(e):
+    def showGames(e=None):
         output.controls.clear()
-        output.controls.append(ft.Text("Free Games Store", size=25))
+        output.controls.append(ft.Text("Games Store", size=25))
 
         games = cursor.execute("SELECT * FROM Game").fetchall()
 
@@ -113,40 +117,99 @@ def main(page: ft.Page):
 
         page.update()
 
-    def load(e):
-        games = requests.get("https://www.freetogame.com/api/games").json()
+    # 🔍 FIXED SEARCH
+    def searchForGames(e: ft.ControlEvent):
+        query = e.control.value.lower()
 
-        cursor.execute("DELETE FROM Game")
+        output.controls.clear()
+        output.controls.append(ft.Text("Search Results", size=25))
 
-        for g in games:
-            cursor.execute(
-                "INSERT INTO Game (id, title, genre, platform, image, description, url) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    g["id"],
-                    g["title"],
-                    g["genre"],
-                    g["platform"],
-                    g["thumbnail"],
-                    g.get("short_description", ""),
-                    g.get("game_url", "")
-                )
-            )
+        if query == "":
+            showGames()
+            return
 
-        conn.commit()
-        showGames(e)
+        games = cursor.execute(
+            """
+            SELECT * FROM Game 
+            WHERE LOWER(title) LIKE ? 
+            OR LOWER(genre) LIKE ? 
+            OR LOWER(platform) LIKE ?
+            """,
+            (f"%{query}%", f"%{query}%", f"%{query}%")
+        ).fetchall()
 
-    main_layout = ft.Column(
-        [
-            ft.Text("Only Free Games Store", size=30, weight="bold"),
-            search_field,
-            message,
-            ft.ElevatedButton("Load/refresh Games", on_click=load),
-            output
-        ],
-        expand=True
+        if not games:
+            output.controls.append(ft.Text("No matching games found"))
+        else:
+            for g in games:
+                output.controls.append(gameCard(g))
+
+        page.update()
+
+    searchField = ft.TextField(
+        label="Search for games",
+        on_change=searchForGames,
     )
 
-    page.add(main_layout)
+    # 🚀 OPTIMIZED LOAD FUNCTION
+    def load(e):
+        if is_loading["value"]:
+            return  # ignore spam clicks
+
+        is_loading["value"] = True
+
+        btn = e.control
+        btn.text = "Loading..."
+        btn.disabled = True
+        page.update()
+
+        try:
+            response = requests.get("https://www.gamerpower.com/api/giveaways", timeout=10)
+            games = response.json()
+
+            for g in games:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO Game 
+                    (id, title, genre, platform, image, description, url) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        g["id"],
+                        g["title"],
+                        g["type"],
+                        g["platforms"],
+                        g["thumbnail"],
+                        g["description"],
+                        g["open_giveaway_url"],
+                    ),
+                )
+
+            conn.commit()
+
+            showGames()
+
+        except Exception as err:
+            output.controls.clear()
+            output.controls.append(ft.Text(f"Error loading games: {err}"))
+
+        finally:
+            btn.text = "Refresh Games"
+            btn.disabled = False
+            is_loading["value"] = False
+            page.update()
+
+    mainLayout = ft.Column(
+        [
+            ft.Text("Games Store", size=30, weight="bold"),
+            searchField,
+            ft.ElevatedButton("Refresh Games", on_click=load),
+            output,
+        ],
+        expand=True,
+    )
+
+    page.add(mainLayout)
 
 
 ft.app(target=main)
