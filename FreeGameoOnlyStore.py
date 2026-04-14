@@ -43,7 +43,7 @@ def main(page: ft.Page):
     output = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
     message = ft.Text()
 
-    # ✅ FIXED SEARCH
+
     def searchForGames(e: ft.ControlEvent):
         query = e.control.value.lower()
         output.controls.clear()
