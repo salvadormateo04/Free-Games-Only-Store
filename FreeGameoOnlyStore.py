@@ -43,23 +43,49 @@ def main(page: ft.Page):
     output = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
     message = ft.Text()
 
-    # ✅ FIXED SEARCH
-    def searchForGames(e: ft.ControlEvent):
-        query = e.control.value.lower()
+    genreFilter = ft.Dropdown(
+        label="Filter by genre",
+        options=[ft.dropdown.Option("All")],
+        value="All"
+    )
+
+    def showGames(e=None):
         output.controls.clear()
+        output.controls.append(ft.Text("Games Store", size=25))
+
+        query = searchField.value.lower() if searchField.value else ""
 
         games = cursor.execute("SELECT * FROM Game").fetchall()
 
-        for g in games:
-            if query in g[1].lower():  # search by title only
+        filtered = [
+            g for g in games
+            if (query in g[1].lower())
+            and (genreFilter.value == "All" or g[2] == genreFilter.value)
+        ]
+
+        if not filtered:
+            output.controls.append(ft.Text("No games found"))
+        else:
+            for g in random.sample(filtered, min(6, len(filtered))):
                 output.controls.append(gameCard(g))
 
         page.update()
+
+    def searchForGames(e):
+        showGames()
 
     searchField = ft.TextField(
         label="Search for games",
         on_change=searchForGames,
     )
+
+    # FIXED clear function
+    def clearSearch(e):
+        searchField.value = ""
+        output.controls.clear()
+        page.update()
+
+    clearBtn = ft.ElevatedButton("Clear", on_click=clearSearch)
 
     def goBack(e=None):
         page.controls.clear()
@@ -83,7 +109,7 @@ def main(page: ft.Page):
                     ft.Text(g[5]),
                     ft.Text(f"worth: {g[7]}"),
                     ft.ElevatedButton(
-                        "Play Game",
+                        "Visit Website",
                         data=g[6],
                         on_click=openGameUrl
                     ),
@@ -116,26 +142,12 @@ def main(page: ft.Page):
             padding=10,
         )
 
-    def showGames(e=None):
-        output.controls.clear()
-        output.controls.append(ft.Text("Games Store", size=25))
-
-        games = cursor.execute("SELECT * FROM Game").fetchall()
-
-        if not games:
-            output.controls.append(ft.Text("No games loaded"))
-        else:
-            output.controls.append(ft.Text("Random Picks", size=20))
-
-            for g in random.sample(games, min(6, len(games))):
-                output.controls.append(gameCard(g))
-
-        page.update()
-
     def load(e):
         games = requests.get("https://www.gamerpower.com/api/giveaways").json()
 
         cursor.execute("DELETE FROM Game")
+
+        genres = set()
 
         for g in games:
             cursor.execute(
@@ -151,14 +163,22 @@ def main(page: ft.Page):
                     g["worth"],
                 ),
             )
+            genres.add(g["type"])
 
         conn.commit()
+
+        genreFilter.options = [ft.dropdown.Option("All")] + [
+            ft.dropdown.Option(x) for x in sorted(genres)
+        ]
+
         showGames()
 
     mainLayout = ft.Column(
         [
             ft.Text("Games Store", size=30, weight="bold"),
             searchField,
+            clearBtn,
+            genreFilter,
             message,
             ft.ElevatedButton("Load/refresh Games", on_click=load),
             output,
