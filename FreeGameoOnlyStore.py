@@ -79,7 +79,6 @@ def main(page: ft.Page):
         on_change=searchForGames,
     )
 
-    # FIXED clear function
     def clearSearch(e):
         searchField.value = ""
         output.controls.clear()
@@ -109,7 +108,7 @@ def main(page: ft.Page):
                     ft.Text(g[5]),
                     ft.Text(f"worth: {g[7]}"),
                     ft.ElevatedButton(
-                        "Visit Website",
+                        "Visit Website",  # ← changed here
                         data=g[6],
                         on_click=openGameUrl
                     ),
